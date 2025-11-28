@@ -1,0 +1,45 @@
+{
+  "as_of": "2025-10-24",
+  "source": "https://www.fatf-gafi.org/en/countries/black-and-grey-lists.html",
+  "categories": [
+    {
+      "category_key": "black_list",
+      "category_name": "High-Risk Jurisdictions subject to a Call for Action",
+      "aka": ["black list"],
+      "description": "Countries or jurisdictions with serious strategic deficiencies to counter money laundering, terrorist financing, and proliferation financing, subject to a call for action and enhanced due diligence.",
+      "countries": [
+        "Democratic People's Republic of Korea",
+        "Iran",
+        "Myanmar"
+      ]
+    },
+    {
+      "category_key": "grey_list",
+      "category_name": "Jurisdictions under Increased Monitoring",
+      "aka": ["grey list"],
+      "description": "Countries actively working with the FATF to address strategic deficiencies in their AML/CFT/CPF regimes and under increased monitoring.",
+      "countries": [
+        "Algeria",
+        "Angola",
+        "Bolivia",
+        "Bulgaria",
+        "Cameroon",
+        "Côte d'Ivoire",
+        "Democratic Republic of Congo",
+        "Haiti",
+        "Kenya",
+        "Lao People's Democratic Republic",
+        "Lebanon",
+        "Monaco",
+        "Namibia",
+        "Nepal",
+        "South Sudan",
+        "Syria",
+        "Venezuela",
+        "Vietnam",
+        "Virgin Islands (UK)",
+        "Yemen"
+      ]
+    }
+  ]
+}
