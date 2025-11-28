@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
+from .risk_engine import RiskMLModel
 
 app = FastAPI(title="Compliance AI Service")
+ml_model = RiskMLModel("app/ml/risk_model.pkl")
 
 class OnboardingRequest(BaseModel):
     country_of_birth: str
@@ -32,25 +34,16 @@ def score_onboarding(req: OnboardingRequest):
     high_risk_countries = {"IR", "KP", "SY"}  # example; later from DB
     medium_risk_countries = {"RU", "AF"}
 
-    if req.country_of_birth in high_risk_countries or req.residency_country in high_risk_countries:
-        score += 50
-        reasons.append("HIGH_RISK_COUNTRY")
+    country_risk_score = 90 if req.country_of_birth in high_risk_countries else 20 if req.country_of_birth in medium_risk_countries else 0
 
-    if req.country_of_birth in medium_risk_countries or req.residency_country in medium_risk_countries:
-        score += 25
-        reasons.append("MEDIUM_RISK_COUNTRY")
+    ml_proba = ml_model.predict_proba(country_risk_score, req.age, req.is_pep, cash_job_flag)
+    ml_score = int(ml_proba * 100)
 
-    if req.is_pep:
-        score += 30
-        reasons.append("PEP")
+    # combine: 70% rules, 30% ML (for example)
+    combined_score = int(0.7 * score + 0.3 * ml_score)
+    combined_score = max(0, min(combined_score, 100))
+    band = map_score_to_band(combined_score)
 
-    cash_jobs = {"currency_exchange", "casino", "night_club"}
-    if req.occupation in cash_jobs:
-        score += 15
-        reasons.append("CASH_INTENSIVE_OCCUPATION")
+    reasons.append(f"ML_PROBA={ml_score}")
 
-    # clamp 0–100
-    score = max(0, min(score, 100))
-    band = map_score_to_band(score)
-
-    return RiskResponse(risk_score=score, risk_band=band, reasons=reasons)
+    return RiskResponse(risk_score=combined_score, risk_band=band, reasons=reasons)

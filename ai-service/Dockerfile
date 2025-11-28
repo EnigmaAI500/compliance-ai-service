@@ -6,6 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY app/ml/risk_model.pkl ./app/ml/risk_model.pkl
 
 EXPOSE 8000
 
