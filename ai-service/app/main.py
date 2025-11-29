@@ -12,6 +12,8 @@ from .sanctions_loader import (
     refresh_sanctions,
     get_sanctions,
 )
+from .llm_risk import llm_score_onboarding
+
 
 app = FastAPI(title="Compliance AI Service")
 ml_model = RiskMLModel("app/ml/risk_model.pkl")
@@ -256,3 +258,14 @@ async def ask_question(body: QAPayload):
             for t in top
         ],
     }
+
+@app.post("/risk/onboarding/llm", response_model=RiskResponse)
+def score_onboarding_llm(req: OnboardingRequest):
+    profile_dict = req.dict()
+    result = llm_score_onboarding(profile_dict)
+
+    return RiskResponse(
+        risk_score=int(result["risk_score"]),
+        risk_band=result["risk_band"],
+        reasons=[str(r) for r in result.get("reasons", [])],
+    )
