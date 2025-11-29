@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY app/ml/risk_model.pkl ./app/ml/risk_model.pkl
 
+COPY sunction-lists ./sunction-lists
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

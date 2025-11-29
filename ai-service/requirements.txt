@@ -5,3 +5,6 @@ scikit-learn
 joblib
 numpy
 requests
+beautifulsoup4
+lxml
+PyPDF2
