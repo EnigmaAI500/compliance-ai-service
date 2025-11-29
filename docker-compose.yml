@@ -1,11 +1,36 @@
-version: "3.9"
 services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: InternalControlDb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # no ports: block here – DB is only used inside Docker network
+    # If you later want to connect from host (pgAdmin), you can add:
+    # ports:
+    #   - "5433:5432"
+
   ai-service:
     build: ./ai-service
     ports:
       - "8000:8000"
     depends_on:
+      - db
       - ollama
+    environment:
+      PGHOST: db              # <— talk to Docker service, not host.docker.internal
+      PGPORT: "5432"
+      PGDATABASE: "InternalControlDb"
+      PGUSER: "postgres"
+      PGPASSWORD: "admin"
+      LOG_DIR: "/var/log/ai-service"
+    volumes:
+      - ./logs:/var/log/ai-service
+    # no need for extra_hosts now
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
 
   ollama:
     image: ollama/ollama:latest
@@ -15,4 +40,5 @@ services:
       - ollama_data:/root/.ollama
 
 volumes:
+  db_data:
   ollama_data:
