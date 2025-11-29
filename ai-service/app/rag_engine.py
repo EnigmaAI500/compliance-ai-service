@@ -3,12 +3,14 @@ import requests
 from typing import List, Dict
 
 OLLAMA_URL = "http://ollama:11434"
+TIMEOUT = 60  # 60 seconds timeout
 
 def embed(text: str) -> List[float]:
-    resp = requests.post(f"{OLLAMA_URL}/api/embeddings", json={
-        "model": "nomic-embed-text",
-        "prompt": text,
-    })
+    resp = requests.post(
+        f"{OLLAMA_URL}/api/embeddings",
+        json={"model": "nomic-embed-text", "prompt": text},
+        timeout=TIMEOUT
+    )
     resp.raise_for_status()
     return resp.json()["embedding"]
 
@@ -29,10 +31,13 @@ CONTEXT:
 QUESTION:
 {question}
 """
-    resp = requests.post(f"{OLLAMA_URL}/api/generate", json={
-        "model": "llama3:8b",
-        "prompt": prompt,
-        "stream": False
-    })
+    print(f"🤖 Calling LLM with prompt length: {len(prompt)} chars")
+    resp = requests.post(
+        f"{OLLAMA_URL}/api/generate",
+        json={"model": "llama3:8b", "prompt": prompt, "stream": False},
+        timeout=120  # 2 minutes for LLM generation
+    )
     resp.raise_for_status()
-    return resp.json()["response"]
+    result = resp.json()["response"]
+    print(f"✅ LLM response received: {len(result)} chars")
+    return result
