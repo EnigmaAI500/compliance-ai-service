@@ -137,7 +137,7 @@ def _llm_overlay_on_top_of_baseline(
     try:
         query = _build_query_for_rag(profile, matches, baseline)
         q_emb = embed(query)
-        top_chunks = doc_store.search(q_emb, k=5, metric=cosine)
+        top_chunks = doc_store.get_top_k(q_emb, k=5, metric=cosine)
         if top_chunks:
             context = "\n\n---\n\n".join(ch["text"] for ch in top_chunks)
         else:

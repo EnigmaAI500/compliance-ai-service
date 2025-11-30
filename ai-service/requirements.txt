@@ -11,3 +11,5 @@ PyPDF2
 psycopg2-binary
 python-Levenshtein
 Unidecode
+openpyxl
+python-multipart
