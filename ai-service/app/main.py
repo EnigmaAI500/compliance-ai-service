@@ -63,8 +63,8 @@ def risk_from_db(req: RiskRequest) -> RiskResponse:
         use_llm=req.use_llm,
     )
 
-    risk_score = int(result.get("risk_score", 50))
-    risk_band = str(result.get("risk_band", "YELLOW")).upper()
+    risk_score = int(result.get("risk_score"))
+    risk_band = str(result.get("risk_band")).upper()
     reasons_list = result.get("reasons") or []
     if not isinstance(reasons_list, list):
         reasons_list = [str(reasons_list)]
