@@ -16,16 +16,6 @@ failure_logger = get_failure_logger()
 
 # --- Models -----------------------------------------------------------------
 
-class OnboardingRequest(BaseModel):
-    # OLD flow (direct data from frontend / other service)
-    country_of_birth: str
-    residency_country: str
-    age: int
-    occupation: str
-    is_pep: bool = False
-    use_llm: bool = False  # optional – choose LLM vs simple
-
-
 class CustomerRiskRequest(BaseModel):
     # NEW flow: only CustomerNo, data taken from Postgres
     customer_no: str
@@ -58,31 +48,6 @@ def _risk_band_to_flag(band: str) -> str:
     if band == "YELLOW":
         return "MEDIUM"
     return "LOW"
-
-
-# --- Old endpoint: risk from request body (keep as-is) ----------------------
-
-@app.post("/risk/from-request", response_model=RiskResponse)
-def risk_from_request(req: OnboardingRequest) -> RiskResponse:
-    """
-    Existing behaviour: risk scoring based on the JSON payload.
-
-    Internally you can choose:
-      - simple_risk_score (fast, rule-based)
-      - llm_score_onboarding (LLM + RAG)
-    """
-    profile = req.dict()
-
-    if req.use_llm:
-        result = llm_score_onboarding(profile)
-    else:
-        result = simple_risk_score(profile)
-
-    return RiskResponse(
-        risk_score=int(result["risk_score"]),
-        risk_band=result["risk_band"],
-        reasons=[str(r) for r in result.get("reasons", [])],
-    )
 
 
 # --- New endpoint: risk from Postgres by CustomerNo -------------------------

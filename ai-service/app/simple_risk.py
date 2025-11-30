@@ -57,12 +57,6 @@ def simple_risk_score(profile: dict) -> dict:
         score += 15
         reasons.append(f"CASH_INTENSIVE_OCCUPATION_{occupation.upper()}")
     
-    # Age factor (very young or very old can be higher risk)
-    age = profile.get('age', 0)
-    if age < 25 or age > 70:
-        score += 5
-        reasons.append(f"AGE_RISK_FACTOR_{age}")
-    
     # Cap score at 100
     score = min(score, 100)
     
