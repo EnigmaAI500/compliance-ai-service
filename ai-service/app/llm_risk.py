@@ -1,62 +1,115 @@
-from typing import List
+from typing import Dict, List
+import json
+
 from .rag_engine import embed, cosine, generate_answer
 from .storage import doc_store
 
 SYSTEM_PROMPT = """Analyze this customer risk profile and return ONLY valid JSON (no extra text):
 {"risk_score": 0-100, "risk_band": "GREEN"/"YELLOW"/"RED", "reasons": ["..."]}
 
-Rules: FATF black list = 90+, grey list = 60+, PEP = +30, UN/EU sanctions = 95+"""
+Rules (guidance, not hard rules):
+- FATF black list countries => risk_score usually 90+
+- FATF grey list => 60+
+- If PEP => +30 to risk_score
+- If UN/EU sanctions or matches local blacklist => 95+ and risk_band="RED"
+
+You MUST:
+- Return only valid JSON.
+- Never include explanations outside of JSON.
+"""
 
 
-def llm_score_onboarding(profile: dict) -> dict:
+def _build_query_from_profile(profile: Dict) -> str:
     """
-    Use Ollama to score risk based on profile + RAG context.
-    Returns parsed JSON dict with keys: risk_score, risk_band, reasons.
+    Turn DB customer profile into a text query for RAG.
     """
-    # 1) Create a query string based on profile to retrieve relevant chunks
-    q_text = (
-        f"Risk evaluation for customer with country_of_birth={profile.get('country_of_birth')}, "
-        f"residency_country={profile.get('residency_country')}, "
-        f"is_pep={profile.get('is_pep')}, "
-        f"occupation={profile.get('occupation')}, "
-        f"full_name={profile.get('full_name')}"
+    country_of_birth = profile.get("country_of_birth") or "unknown"
+    residency_country = profile.get("residency_country") or "unknown"
+    occupation = profile.get("occupation") or "unknown"
+    is_pep = profile.get("is_pep")
+
+    return (
+        f"Customer from {residency_country}, born in {country_of_birth}, "
+        f"occupation {occupation}, PEP={is_pep}. "
+        "Check FATF risk, UN/EU sanctions, local blacklist and overall AML risk."
     )
 
-    q_emb = embed(q_text)
-    # OPTIMIZATION: Reduce to top 3 chunks only
-    top = doc_store.get_top_k(q_emb, k=3, metric=cosine)
 
-    # OPTIMIZATION: Limit context to first 2000 chars per chunk
-    context = "\n\n---\n\n".join([t["text"][:2000] for t in top])
-
-    # OPTIMIZATION: Shorter, more direct prompt
-    user_content = f"""{SYSTEM_PROMPT}
-
-Profile: {profile}
-
-Context (FATF/sanctions):
-{context[:3000]}"""
-
-    # 2) Call LLM with simplified prompt
-    raw_answer = generate_answer(
-        question=user_content,
-        context=""  # Already included in question
-    )
-
-    # 3) Parse JSON (be defensive)
-    import json
+def llm_score_onboarding(profile: Dict) -> Dict:
+    """
+    Use Ollama + RAG (sanctions + FATF docs in doc_store) to score risk.
+    Returns dict: { risk_score: int, risk_band: str, reasons: List[str] }
+    """
+    # 1) Build query & retrieve top sanctions/FATF chunks
     try:
-        result = json.loads(raw_answer)
-    except json.JSONDecodeError:
-        # Fallback in worst case
+        query = _build_query_from_profile(profile)
+        query_embedding = embed(query)
+        top_chunks = doc_store.search(query_embedding, k=5, metric=cosine)
+
+        if top_chunks:
+            context = "\n\n---\n\n".join(chunk["text"] for chunk in top_chunks)
+        else:
+            context = "No sanctions documents found in the knowledge base."
+    except Exception:
+        # If embeddings / doc_store fail, still continue with pure profile-based scoring
+        context = "Sanctions knowledge base is temporarily unavailable."
+
+    # 2) Ask LLM to produce JSON only
+    question = (
+        f"{SYSTEM_PROMPT}\n\n"
+        f"CONTEXT_FROM_DOCUMENTS:\n{context}\n\n"
+        f"CUSTOMER_PROFILE_JSON:\n{json.dumps(profile, ensure_ascii=False)}\n\n"
+        "Return only a single JSON object."
+    )
+
+    raw_answer = generate_answer(question=question, context="")
+
+    # 3) Try to extract JSON even if model wraps it with extra text
+    try:
+        start = raw_answer.find("{")
+        end = raw_answer.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            json_str = raw_answer[start : end + 1]
+        else:
+            json_str = raw_answer
+
+        result = json.loads(json_str)
+    except Exception:
         return {
             "risk_score": 50,
             "risk_band": "YELLOW",
-            "reasons": ["LLM_OUTPUT_PARSE_ERROR", f"raw={raw_answer[:200]}"]
+            "reasons": [
+                "LLM_OUTPUT_PARSE_ERROR",
+                f"raw={raw_answer[:200]}",
+            ],
         }
 
-    # sanity defaults
-    result.setdefault("risk_score", 50)
-    result.setdefault("risk_band", "YELLOW")
-    result.setdefault("reasons", [])
-    return result
+    # 4) Normalize fields and enforce types
+    # risk_score
+    rs = result.get("risk_score", 50)
+    try:
+        rs = int(rs)
+    except (ValueError, TypeError):
+        rs = 50
+    rs = max(0, min(100, rs))
+
+    # risk_band
+    band = str(result.get("risk_band", "YELLOW")).upper()
+    if band not in ("GREEN", "YELLOW", "RED"):
+        if rs >= 80:
+            band = "RED"
+        elif rs >= 50:
+            band = "YELLOW"
+        else:
+            band = "GREEN"
+
+    # reasons
+    reasons = result.get("reasons") or []
+    if not isinstance(reasons, list):
+        reasons = [str(reasons)]
+
+    return {
+        "risk_score": rs,
+        "risk_band": band,
+        "reasons": reasons,
+    }

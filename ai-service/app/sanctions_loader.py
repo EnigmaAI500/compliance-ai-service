@@ -1,12 +1,19 @@
+# app/sanctions_loader.py
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from bs4 import BeautifulSoup  # type: ignore
 from PyPDF2 import PdfReader  # type: ignore
+from unidecode import unidecode
+
+
+BASE_DIR = Path(__file__).resolve().parent
+SANCTIONS_DIR = BASE_DIR.parent / "sunction-lists"
 
 
 @dataclass
@@ -19,218 +26,152 @@ class FATFCategory:
 
 @dataclass
 class SanctionEntry:
-    source: str  # "UN" or "EU"
+    id: str
     name: str
-    raw: str
+    list_type: str  # "UN" | "EU" | "LOCAL"
+    raw: dict
 
 
 @dataclass
-class SanctionsDataset:
-    as_of: Optional[str]
-    fatf_categories: Dict[str, FATFCategory]
-    fatf_country_index: Dict[str, str]  # normalized country -> category_key
-    un_entries: List[SanctionEntry]
-    eu_entries: List[SanctionEntry]
-    names_index: Dict[str, List[SanctionEntry]]  # normalized name -> entries
-
-
-_SANCTIONS_CACHE: Optional[SanctionsDataset] = None
-
-
-def _base_dir() -> Path:
-    """
-    app/sanctions_loader.py -> app -> ai-service
-    base_dir will be the ai-service directory where sunction-lists/ lives.
-    """
-    return Path(__file__).resolve().parent.parent
+class SanctionsData:
+    fatf_by_country: Dict[str, FATFCategory]           # normalized country -> category
+    sanctions: List[SanctionEntry]
+    names_index: Dict[str, List[SanctionEntry]]        # normalized name -> entries
 
 
 def _normalize(text: str) -> str:
-    return " ".join(text.upper().split())
+    """
+    Aggressive normalization: lower, trim, remove extra spaces,
+    transliterate to ASCII so Cyrillic/Latin become comparable.
+    """
+    if not text:
+        return ""
+    text = unidecode(text)
+    text = text.strip().lower()
+    # collapse spaces
+    parts = text.split()
+    return " ".join(parts)
 
 
-# ---------- FATF JSON ----------
+def _load_fatf() -> Dict[str, FATFCategory]:
+    path = SANCTIONS_DIR / "fatf-countries.json"
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
 
-def _load_fatf(base_dir: Path) -> tuple[Optional[str], Dict[str, FATFCategory], Dict[str, str]]:
-    path = base_dir / "sunction-lists" / "fatf-countries.json"
-    if not path.exists():
-        raise FileNotFoundError(f"FATF JSON not found at {path}")
-
-    data = json.loads(path.read_text(encoding="utf-8"))
-    categories: Dict[str, FATFCategory] = {}
-    country_index: Dict[str, str] = {}
-    as_of = data.get("as_of")
-
-    for cat in data.get("categories", []):
-        category = FATFCategory(
-            key=cat["category_key"],
-            name=cat.get("category_name", cat["category_key"]),
-            description=cat.get("description", ""),
-            countries=cat.get("countries", []),
+    result: Dict[str, FATFCategory] = {}
+    for cat_raw in data.get("categories", []):
+        cat = FATFCategory(
+            key=cat_raw["category_key"],
+            name=cat_raw["category_name"],
+            description=cat_raw.get("description", ""),
+            countries=cat_raw.get("countries", []),
         )
-        categories[category.key] = category
-        for country in category.countries:
-            country_index[_normalize(country)] = category.key
-
-    return as_of, categories, country_index
+        for country in cat.countries:
+            result[_normalize(country)] = cat
+    return result
 
 
-# ---------- UN HTML ----------
-
-def _load_un_html(base_dir: Path) -> List[SanctionEntry]:
+def _load_un_sanctions() -> List[SanctionEntry]:
     """
-    Very simple parser for UN sanctions HTML.
-    Assumes the 2nd <td> in a row is the name. You can refine later.
+    Very simple HTML parsing based on the UN sanctions HTML file.
+    You may refine selectors when you see the exact structure.
     """
-    path = base_dir / "sunction-lists" / "UN-sunctions-list.html"
-    if not path.exists():
-        return []
-
+    path = SANCTIONS_DIR / "UN-sunctions-list.html"
     html = path.read_text(encoding="utf-8", errors="ignore")
     soup = BeautifulSoup(html, "lxml")
 
     entries: List[SanctionEntry] = []
-
-    for row in soup.find_all("tr"):
-        cols = row.find_all("td")
-        if len(cols) < 2:
+    # Heuristic: assume sanctioned persons appear as <b>NAME</b> or in specific <td>.
+    # Adjust selectors when you inspect the file in detail.
+    for idx, bold in enumerate(soup.find_all("b")):
+        name_text = bold.get_text(strip=True)
+        if not name_text:
             continue
-
-        name = cols[1].get_text(" ", strip=True)
-        if not name:
-            continue
-
-        # Skip header rows
-        if "name" in name.lower():
-            continue
-
-        raw_text = row.get_text(" ", strip=True)
-        entries.append(SanctionEntry(source="UN", name=name, raw=raw_text))
-
+        entries.append(
+            SanctionEntry(
+                id=f"UN-{idx}",
+                name=name_text,
+                list_type="UN",
+                raw={"source": "UN", "raw_text": name_text},
+            )
+        )
     return entries
 
 
-# ---------- EU PDF ----------
-
-def _load_eu_pdf(base_dir: Path) -> List[SanctionEntry]:
+def _load_eu_sanctions() -> List[SanctionEntry]:
     """
-    Naive text extraction from EU PDF.
-    Treats each non-empty line as a potential 'entry'.
-    Improve heuristics later if needed.
+    Simple PDF scanning: treat all ALL-CAPS lines as potential names.
+    This is heuristic – adjust thresholds to your PDF.
     """
-    path = base_dir / "sunction-lists" / "EU-suctions-list.pdf"
-    if not path.exists():
-        return []
-
+    path = SANCTIONS_DIR / "EU-suctions-list.pdf"
     reader = PdfReader(str(path))
-    text_parts: List[str] = []
-    for page in reader.pages:
-        page_text = page.extract_text() or ""
-        text_parts.append(page_text)
 
-    full_text = "\n".join(text_parts)
     entries: List[SanctionEntry] = []
-
-    for line in full_text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-
-        # Skip very short or obvious headings
-        if len(line) < 5:
-            continue
-        if line.isupper() and "COUNCIL" in line:
-            continue
-
-        entries.append(SanctionEntry(source="EU", name=line, raw=line))
-
+    idx = 0
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        for line in text.splitlines():
+            line = line.strip()
+            if len(line) < 5:
+                continue
+            # crude heuristic for "name-like" lines
+            if line.isupper():
+                entries.append(
+                    SanctionEntry(
+                        id=f"EU-{idx}",
+                        name=line,
+                        list_type="EU",
+                        raw={"source": "EU", "raw_text": line},
+                    )
+                )
+                idx += 1
     return entries
 
 
-# ---------- Public API with caching ----------
-
-def load_sanctions() -> SanctionsDataset:
-    """
-    Load sanction data from disk (no caching).
-    """
-    base_dir = _base_dir()
-    as_of, fatf_categories, fatf_country_index = _load_fatf(base_dir)
-    un_entries = _load_un_html(base_dir)
-    eu_entries = _load_eu_pdf(base_dir)
-
-    names_index: Dict[str, List[SanctionEntry]] = {}
-    for entry in un_entries + eu_entries:
+def _build_names_index(sanctions: List[SanctionEntry]) -> Dict[str, List[SanctionEntry]]:
+    index: Dict[str, List[SanctionEntry]] = {}
+    for entry in sanctions:
         key = _normalize(entry.name)
-        names_index.setdefault(key, []).append(entry)
+        if not key:
+            continue
+        index.setdefault(key, []).append(entry)
+    return index
 
-    return SanctionsDataset(
-        as_of=as_of,
-        fatf_categories=fatf_categories,
-        fatf_country_index=fatf_country_index,
-        un_entries=un_entries,
-        eu_entries=eu_entries,
+
+@lru_cache(maxsize=1)
+def get_sanctions() -> SanctionsData:
+    """
+    Load everything once per process and cache in memory.
+    """
+    fatf = _load_fatf()
+    un_entries = _load_un_sanctions()
+    eu_entries = _load_eu_sanctions()
+    sanctions = un_entries + eu_entries  # local blacklist we’ll add later
+
+    names_index = _build_names_index(sanctions)
+    return SanctionsData(
+        fatf_by_country=fatf,
+        sanctions=sanctions,
         names_index=names_index,
     )
 
 
-def get_sanctions() -> SanctionsDataset:
-    """
-    Get sanctions data with simple in-process cache.
-    """
-    global _SANCTIONS_CACHE
-    if _SANCTIONS_CACHE is None:
-        _SANCTIONS_CACHE = load_sanctions()
-    return _SANCTIONS_CACHE
-
-
-def refresh_sanctions() -> SanctionsDataset:
-    """
-    Force reload from disk into the cache.
-    """
-    global _SANCTIONS_CACHE
-    _SANCTIONS_CACHE = load_sanctions()
-    return _SANCTIONS_CACHE
-
-
-# ---------- Convenience helpers for your endpoints ----------
-
-def get_fatf_category_for_country(country: str) -> Optional[str]:
-    """
-    Returns FATF category key ("black_list", "grey_list", etc.) for a country name.
-    Assumes you send full country names like in fatf-countries.json.
-    """
-    if not country:
+# Convenience helpers used elsewhere
+def get_fatf_category(country_name: str) -> Optional[FATFCategory]:
+    if not country_name:
         return None
     data = get_sanctions()
-    return data.fatf_country_index.get(_normalize(country))
+    return data.fatf_by_country.get(_normalize(country_name))
 
 
-def compute_country_risk_score(country_of_birth: str, residency_country: str) -> int:
-    """
-    Map FATF category to a numeric risk score for ML.
-    """
-    cat_scores = {
-        "black_list": 90,
-        "grey_list": 60,
-        None: 10,  # default if not present
-    }
-
-    cats = [
-        get_fatf_category_for_country(country_of_birth),
-        get_fatf_category_for_country(residency_country),
-    ]
-
-    return max(cat_scores.get(cat, 10) for cat in cats)
-
-
-def is_name_sanctioned(full_name: str) -> bool:
+def is_name_sanctioned_exact(full_name: str) -> bool:
     if not full_name:
         return False
     data = get_sanctions()
     return _normalize(full_name) in data.names_index
 
 
-def get_sanction_matches(full_name: str) -> List[SanctionEntry]:
+def get_exact_sanction_matches(full_name: str) -> List[SanctionEntry]:
     if not full_name:
         return []
     data = get_sanctions()
