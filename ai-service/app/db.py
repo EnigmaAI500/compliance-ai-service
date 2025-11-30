@@ -70,7 +70,13 @@ def update_customer_risk(
         "RiskReason" = %s
     WHERE "CustomerNo" = %s
     """
-    with _get_conn() as conn:
+    conn = _get_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute(sql, (risk_flag, risk_score, risk_reason, customer_no))
         conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
