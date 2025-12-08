@@ -26,6 +26,9 @@ services:
       PGUSER: "postgres"
       PGPASSWORD: "admin"
       LOG_DIR: "/var/log/ai-service"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: "gpt-4o-mini"
+
     volumes:
       - ./logs:/var/log/ai-service
     # no need for extra_hosts now

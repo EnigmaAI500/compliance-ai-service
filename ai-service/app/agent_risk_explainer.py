@@ -1,26 +1,38 @@
-# ai-service/app/agent_risk_explainer.py
 from typing import Dict, Any
-from .llm_utils import call_ollama_json
+from .openai_client import call_openai_json
 
 RISK_EXPLAIN_SYSTEM_PROMPT = """
 You are an AI assistant for a bank’s compliance risk engine.
 You receive structured risk evidence for one customer and must:
-- Summarize top risk drivers.
-- Generate tags with codes, labels, severity, source, and evidence.
+- Summarize top risk drivers,
+- Generate tags with codes, labels, severity, source, and evidence,
 - Suggest recommended actions.
+
 Risk levels: LOW, MEDIUM, HIGH, CRITICAL.
-Focus on these top drivers: FATF high-risk jurisdictions, VPN or foreign IP mismatch,
-high-risk occupations (front-company, cash-intensive business).
-Return strictly valid JSON that fits into the 'risk', 'tags', and 'recommendedActions'
-fields of our response model.
+Focus on these top drivers:
+- FATF high-risk jurisdictions,
+- VPN or foreign IP mismatch,
+- High-risk occupations (front-company, cash-intensive business).
+
+Return strictly valid JSON like:
+{
+  "risk": { ... },
+  "tags": [ ... ],
+  "recommendedActions": [ ... ]
+}
+Do NOT include any text outside the JSON.
 """.strip()
 
 
-def explain_risk(risk_input: Dict[str, Any], engine_result: Dict[str, Any], sanctions_decision: Dict[str, Any]) -> Dict[str, Any]:
+def explain_risk(
+    risk_input: Dict[str, Any],
+    engine_result: Dict[str, Any],
+    sanctions_decision: Dict[str, Any],
+) -> Dict[str, Any]:
     payload = {
         "customer": {
-            "customerNo": risk_input["customerNo"],
-            "fullName": risk_input["fullName"],
+            "customerNo": risk_input.get("customerNo"),
+            "fullName": risk_input.get("fullName"),
             "citizenship": risk_input.get("citizenship"),
             "nationalityDesc": risk_input.get("nationalityDesc"),
             "birthCountry": risk_input.get("birthCountry"),
@@ -36,4 +48,4 @@ def explain_risk(risk_input: Dict[str, Any], engine_result: Dict[str, Any], sanc
         "sourceFlags": risk_input.get("sourceFlags") or {},
     }
 
-    return call_ollama_json(RISK_EXPLAIN_SYSTEM_PROMPT, payload)
+    return call_openai_json(RISK_EXPLAIN_SYSTEM_PROMPT, payload)
