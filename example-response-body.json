@@ -1,0 +1,187 @@
+{
+  "report_id": "rpt_2025_12_07_001",
+  "generated_at": "2025-12-07T15:45:00Z",
+
+  "file": {
+    "filename": "customer_list.xlsx",
+    "rows_processed": 10,
+    "missing_optional_fields": ["RiskFlag", "RiskReason (for most rows)"],
+    "upload_country": "UZ",
+    "validation": {
+      "status": "OK",
+      "errors": [],
+      "warnings": [
+        "Some customers have no RiskFlag values",
+        "Some business categories appear high-risk by FATF definitions"
+      ]
+    }
+  },
+
+  "summary": {
+    "total_customers": 10,
+    "risk_distribution": {
+      "LOW": 7,
+      "MEDIUM": 0,
+      "HIGH": 3,
+      "CRITICAL": 0
+    },
+    "avg_score": 26,
+    "top_risk_drivers": [
+      "FATF high-risk jurisdictions",
+      "VPN or foreign IP mismatch",
+      "High-risk occupations (front company, cash-intensive business)"
+    ],
+    "flags_count": {
+      "FATF_HIGH_RISK": 3,
+      "COUNTRY_MISMATCH": 4,
+      "DEVICE_REUSE": 2,
+      "PEP_MATCH": 1,
+      "EMAIL_HIGH_RISK": 1
+    }
+  },
+
+  "customers": [
+    {
+      "customerNo": "CUST-HR-100",
+      "fullName": "ALI REZA (a.k.a. REZA ALI)",
+      "citizenship": "IRN",
+      "nationality": "Iranian",
+      "birthCountry": "Iran",
+
+      "document": {
+        "type": "PASSPORT",
+        "number": "IRP1234567",
+        "issuer": {
+          "code": "IR-TEH-01",
+          "place": "Tehran"
+        },
+        "expiryDate": "2030-12-31"
+      },
+
+      "residency": {
+        "residentStatus": "NON_RESIDENT",
+        "district": "Shaykhontohur",
+        "region": "Tashkent City",
+        "locality": "Tashkent",
+        "street": "Navoi 10",
+        "addressCode": "INT-IR-001"
+      },
+
+      "business_profile": {
+        "mainAccountCategory": "international_money_service_business",
+        "categoryRisk": "HIGH"
+      },
+
+      "risk": {
+        "score": 80,
+        "riskLevel": "HIGH",
+        "confidence": 0.86,
+        "riskDrivers": [
+          "Customer from FATF high-risk jurisdiction",
+          "High-risk business category",
+          "Country-based sanctions risk"
+        ],
+        "breakdown": {
+          "sanctions": 50,
+          "pep": 0,
+          "digitalFootprint": 15,
+          "device": 10,
+          "profile": 5
+        }
+      },
+
+      "tags": [
+        {
+          "code": "FATF_HIGH_RISK",
+          "label": "FATF High-Risk Jurisdiction",
+          "severity": "HIGH",
+          "source": "country_risk_list",
+          "evidence": {
+            "citizenship": "IRN",
+            "countryName": "Iran"
+          }
+        },
+        {
+          "code": "COUNTRY_HIGH_RISK",
+          "label": "High-Risk Jurisdiction Mismatch",
+          "severity": "MEDIUM",
+          "source": "geo_validation",
+          "evidence": {
+            "declaredCountry": "IR",
+            "riskIndex": 92
+          }
+        }
+      ],
+
+      "recommendedActions": [
+        {
+          "action": "Enhanced Due Diligence",
+          "urgency": "HIGH",
+          "reason": "Multiple high-risk indicators including jurisdiction and business activity"
+        }
+      ],
+
+      "rawInput": {
+        "MainAccount": "international_money_service_business",
+        "District": "Shaykhontohur",
+        "Region": "Tashkent City",
+        "Locality": "Tashkent",
+        "Street": "Navoi 10",
+        "Pinfl": "90000000000001"
+      }
+    },
+
+    {
+      "customerNo": "CUST-HR-090",
+      "fullName": "KIM CHOL (a.k.a. CHOL KIM)",
+      "citizenship": "PRK",
+      "birthCountry": "Democratic People's Republic of Korea",
+      "document": {
+        "type": "PASSPORT",
+        "number": "KPP7654321",
+        "issuer": {
+          "code": "KP-PYO-01",
+          "place": "Pyongyang"
+        },
+        "expiryDate": "2031-05-20"
+      },
+      "business_profile": {
+        "mainAccountCategory": "front_company_trader",
+        "categoryRisk": "CRITICAL"
+      },
+      "risk": {
+        "score": 100,
+        "riskLevel": "HIGH",
+        "confidence": 0.92
+      },
+      "tags": [
+        {
+          "code": "FATF_HIGH_RISK",
+          "severity": "HIGH"
+        },
+        {
+          "code": "EMAIL_HIGH_RISK",
+          "severity": "MEDIUM"
+        },
+        {
+          "code": "DEVICE_REUSE",
+          "severity": "MEDIUM",
+          "evidence": { "reuseCount": 5 }
+        }
+      ]
+    }
+  ],
+
+  "exports": {
+    "pdf": "/exports/rpt_2025_12_07_001/report.pdf",
+    "excel": "/exports/rpt_2025_12_07_001/details.xlsx",
+    "json": "/exports/rpt_2025_12_07_001/raw.json"
+  },
+
+  "engine_info": {
+    "version": "compliance-engine-v1.5.0",
+    "data_sources": ["OFAC", "UN", "EU", "PEP-DB-v3", "GeoRisk-2025"],
+    "scoring_model": "weighted-rules+ml",
+    "definitions_version": "2025.12"
+  }
+}
