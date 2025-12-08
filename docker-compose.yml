@@ -19,15 +19,17 @@ services:
     depends_on:
       - db
       - ollama
+    env_file:
+      - .env
     environment:
-      PGHOST: db              # <— talk to Docker service, not host.docker.internal
+      PGHOST: db
       PGPORT: "5432"
       PGDATABASE: "InternalControlDb"
       PGUSER: "postgres"
       PGPASSWORD: "admin"
       LOG_DIR: "/var/log/ai-service"
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: "gpt-4o-mini"
+      OPENAI_MODEL: ${OPENAI_MODEL}
 
     volumes:
       - ./logs:/var/log/ai-service
