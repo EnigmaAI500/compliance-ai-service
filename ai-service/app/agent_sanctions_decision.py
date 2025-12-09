@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from .openai_client import call_openai_json
+from .azure_openai_client import call_azure_chat_json
 from .bulk_sanctions_matcher import find_sanction_candidates
 
 
@@ -35,4 +35,4 @@ def decide_sanctions(risk_input: Dict[str, Any]) -> Dict[str, Any]:
             "reason": "No candidates found for screening",
         }
 
-    return call_openai_json(SANCTIONS_SYSTEM_PROMPT, payload)
+    return call_azure_chat_json(system_prompt=SANCTIONS_SYSTEM_PROMPT, payload=payload)

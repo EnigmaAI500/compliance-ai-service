@@ -28,8 +28,6 @@ services:
       PGUSER: "postgres"
       PGPASSWORD: "admin"
       LOG_DIR: "/var/log/ai-service"
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: ${OPENAI_MODEL}
 
     volumes:
       - ./logs:/var/log/ai-service

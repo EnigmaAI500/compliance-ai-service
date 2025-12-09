@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from .openai_client import call_openai_json
+from .azure_openai_client import call_azure_chat_json
 
 RISK_EXPLAIN_SYSTEM_PROMPT = """
 You are an AI assistant for a bank’s compliance risk engine.
@@ -48,4 +48,4 @@ def explain_risk(
         "sourceFlags": risk_input.get("sourceFlags") or {},
     }
 
-    return call_openai_json(RISK_EXPLAIN_SYSTEM_PROMPT, payload)
+    return call_azure_chat_json(system_prompt=RISK_EXPLAIN_SYSTEM_PROMPT, payload=payload)
