@@ -23,6 +23,8 @@ def process_bulk_excel(file_bytes: bytes, filename: str, upload_country: str = "
     inputs: List[Dict[str, Any]] = parsed["customers"]
 
     risk_engine = BulkRiskEngine()
+    # Reset device tracking for this batch
+    risk_engine.reset_device_tracking()
 
     customers_output: List[CustomerRiskOutput] = []
     scores_for_avg: List[int] = []
@@ -100,14 +102,21 @@ def process_bulk_excel(file_bytes: bytes, filename: str, upload_country: str = "
     # summary
     avg_score = float(mean(scores_for_avg)) if scores_for_avg else 0.0
 
-    # top risk drivers – for now pick from flags_count codes and map to friendly labels
+    # Enhanced top risk drivers mapping
     driver_labels_map = {
         "FATF_HIGH_RISK": "FATF high-risk jurisdictions",
+        "FATF_GREY_LIST": "FATF grey list countries",
         "COUNTRY_MISMATCH": "High-risk jurisdiction mismatch",
-        "DEVICE_REUSE": "VPN or foreign IP mismatch",
+        "VPN_USAGE": "VPN or foreign IP mismatch",
+        "DEVICE_REUSE": "Device reuse across multiple customers",
         "EMAIL_HIGH_RISK": "High-risk email domain",
+        "HIGH_RISK_OCCUPATION": "High-risk occupations (front company, cash-intensive business)",
+        "SANCTIONS_MATCH": "Sanctions list matches",
+        "PEP_MATCH": "Politically Exposed Persons",
+        "LOCAL_BLACKLIST": "Local blacklist matches",
     }
-    # naive top 3
+    
+    # Get top 3 risk drivers
     sorted_flags = sorted(flags_count.items(), key=lambda kv: kv[1], reverse=True)
     top_risk_drivers = []
     for code, _ in sorted_flags[:3]:
@@ -142,9 +151,9 @@ def process_bulk_excel(file_bytes: bytes, filename: str, upload_country: str = "
     report_id = f"rpt_{datetime.utcnow().strftime('%Y_%m_%d_%H%M%S')}_{uuid.uuid4().hex[:4]}"
 
     engine_info = EngineInfo(
-        version="compliance-engine-v1.5.0",
-        data_sources=["OFAC", "UN", "EU", "PEP-DB-v3", "GeoRisk-2025"],
-        scoring_model="weighted-rules+ml",
+        version="compliance-engine-v2.0.0",
+        data_sources=["FATF", "UN", "EU", "OFAC", "PEP-DB-v3", "GeoRisk-2025"],
+        scoring_model="weighted-rules+azure-openai",
         definitions_version="2025.12",
     )
 

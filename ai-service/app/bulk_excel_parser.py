@@ -34,16 +34,20 @@ class BulkExcelParser:
         "NationalityDesc",
         "AddressCode",
         "ResidentStatus",
-        # plus your 2 new columns:
-        "Email",
-        "IPAddress",
-        # RiskFlag/RiskScore/RiskReason treated as optional, see below
     ]
 
     OPTIONAL_COLUMNS = [
         "RiskFlag",
         "RiskScore",
         "RiskReason",
+        # New optional columns for enhanced risk detection
+        "Email",
+        "IPAddress",
+        "IPCountry",
+        "IsVPN",
+        "DeviceId",
+        "Occupation",
+        "BirthDate",
     ]
 
     def _normalize_name(self, name: str) -> str:
@@ -129,6 +133,7 @@ class BulkExcelParser:
             "nationality": str(row.get("Nationality") or ""),
             "nationalityDesc": str(row.get("NationalityDesc") or ""),
             "birthCountry": str(row.get("BirthCountry") or ""),
+            "birthDate": str(row.get("BirthDate") or ""),  # New field for sanctions matching
 
             "document": {
                 "type": str(row.get("RegDocType") or ""),
@@ -149,12 +154,16 @@ class BulkExcelParser:
             },
 
             "business": {
-                "mainAccount": str(row.get("MainAccount") or "").lower()
+                "mainAccount": str(row.get("MainAccount") or "").lower(),
+                "occupation": str(row.get("Occupation") or ""),
             },
 
             "digital": {
                 "email": str(row.get("Email") or ""),
                 "ipAddress": str(row.get("IPAddress") or ""),
+                "ipCountry": str(row.get("IPCountry") or ""),
+                "isVPN": str(row.get("IsVPN") or "").upper() in ["Y", "YES", "TRUE", "1"],
+                "deviceId": str(row.get("DeviceId") or ""),
             },
 
             "sourceFlags": {

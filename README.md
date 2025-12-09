@@ -1,82 +1,288 @@
 # Compliance AI Service
 
-AML/CFT Risk Assessment Service with sanctions matching, FATF country risk analysis, and LLM-powered compliance checks.
+Enterprise-grade AML/CFT Risk Assessment Service with Azure OpenAI integration, sanctions matching, FATF country risk analysis, VPN detection, device tracking, and comprehensive compliance checks.
+
+## 🌟 Features
+
+- **4-Band Risk Scoring**: LOW, MEDIUM, HIGH, CRITICAL with deterministic rules
+- **Azure OpenAI Integration**: GPT-4 powered risk analysis and explanations
+- **Sanctions Screening**: Name, birthdate, and birthplace matching
+- **FATF Country Risk**: Automatic detection of high-risk and grey-list jurisdictions
+- **VPN & IP Detection**: Identify VPN usage and country mismatches
+- **Device Reuse Tracking**: Detect devices shared across multiple customers
+- **High-Risk Occupations**: Front companies, cash-intensive businesses, MSBs
+- **Bulk Excel Processing**: Analyze hundreds of customers in one API call
+- **Structured JSON Output**: Consistent, Pydantic-validated responses
+
+## 📚 Documentation
+
+- **[Quick Start Guide](QUICKSTART.md)** - Get up and running in 5 minutes
+- **[Implementation Guide](IMPLEMENTATION_GUIDE.md)** - Comprehensive technical documentation
+- **[Excel Template Specification](EXCEL_TEMPLATE_SPEC.md)** - Input file format and requirements
+- **[Example Response](example-response-body.json)** - Sample API output
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Docker Desktop installed and running
-- At least 8GB RAM available
-- PowerShell or Command Prompt
+- Azure OpenAI resource with GPT-4 or GPT-4o deployment
+- At least 4GB RAM available
 
-### Step 1: Start the Services
+### 1. Configure Azure OpenAI
 
-```powershell
-# Navigate to project directory
-cd c:\Users\FirdavsMuzaffarov\Desktop\agent-projects\compliance-ai-service
+```bash
+# Copy environment template
+cp .env.example .env
 
-# Start all services (PostgreSQL, Ollama, AI Service)
-docker-compose up -d --build
+# Edit .env with your credentials:
+# AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+# AZURE_OPENAI_API_KEY=your-api-key
+# AZURE_OPENAI_DEPLOYMENT_RISK=gpt-4o
 ```
 
-This will start:
-- **PostgreSQL** database on internal Docker network
-- **Ollama** LLM service on port 11434
-- **AI Service** FastAPI application on port 8000
+### 2. Start the Service
 
-### Step 2: Download Ollama Models
-
-The AI service needs embedding and generation models:
-
-```powershell
-# Download embedding model (required for RAG)
-docker exec -it compliance-ai-service-ollama-1 ollama pull nomic-embed-text
-
-# Download generation model (for LLM analysis)
-docker exec -it compliance-ai-service-ollama-1 ollama pull llama3:8b
+```bash
+docker compose up --build
 ```
 
-**Note:** These models are large (embedding ~274MB, llama3 ~4.7GB). Download time depends on your internet speed.
+Service will be available at `http://localhost:8000`
 
-### Step 3: Verify Services are Running
+### 3. Upload Excel File
 
-```powershell
-# Check service status
-docker-compose ps
-
-# Check AI service logs
-docker-compose logs ai-service
-
-# Check if API is responding
-curl http://localhost:8000/docs
+```bash
+curl -X POST "http://localhost:8000/risk/bulk-excel?upload_country=UZ" \
+  -F "file=@your-customer-list.xlsx"
 ```
 
-You should see the FastAPI Swagger documentation at http://localhost:8000/docs
+Or use the interactive API docs: `http://localhost:8000/docs`
 
----
+## 📊 Risk Scoring System
 
-## 📊 Testing the Excel Batch Endpoint
+### 4-Band Risk Levels
 
-### Create a Test Excel File
+| Level | Score Range | Action Required |
+|-------|-------------|-----------------|
+| **LOW** | 0-24 | Standard monitoring |
+| **MEDIUM** | 25-49 | Enhanced monitoring with alerts |
+| **HIGH** | 50-74 | Enhanced due diligence |
+| **CRITICAL** | 75-100 | Immediate escalation to compliance |
 
-Create a file named `test_customers.xlsx` with these columns:
+### Risk Factors Analyzed
 
-#### Required Columns:
-- `CustomerNo` - Unique customer identifier
-- `DocumentName` - Customer full name
-- `BirthCountry` - Country of birth
-- `Citizenship` - Citizenship code (ISO or full name)
+| Factor | Weight | Examples |
+|--------|--------|----------|
+| **Sanctions** | Up to 50 | FATF blacklist countries, sanctions matches |
+| **PEP** | Up to 30 | Politically Exposed Persons |
+| **Profile** | Up to 40 | High-risk occupations, cash-intensive businesses |
+| **Digital** | Up to 30 | VPN usage, IP mismatches, suspicious email domains |
+| **Device** | Up to 20 | Device reuse across multiple customers |
 
-#### Optional Columns (for better risk analysis):
-- `Nationality` - Nationality description
-- `MainAccount` - Occupation/account type
-- `RiskFlag` - Set to "PEP" for Politically Exposed Persons
-- `LocalBlackListFlag` - Set to "Y" if on local blacklist
-- `ResidentStatus` - Resident status
-- `District`, `Region`, `Locality`, `Street` - Address information
-- `Pinfl` - Personal identification number
-- `PassportIssuerCode`, `PassportIssuerPlace` - Passport details
+**Special Rules:**
+- Local blacklist → Automatic CRITICAL (100)
+- Sanctions match (>80% confidence) → Minimum 90 (CRITICAL)
+
+## 🏗️ Architecture
+
+```
+Excel Upload
+    ↓
+Excel Parser (validation)
+    ↓
+Risk Engine (deterministic scoring)
+    ├→ FATF Country Risk
+    ├→ PEP Detection
+    ├→ Occupation Risk
+    ├→ VPN/IP Detection
+    └→ Device Tracking
+    ↓
+Sanctions Matcher (name + birthdate)
+    ↓
+Azure OpenAI (GPT-4)
+    ├→ Risk Explanation
+    ├→ Tags with Evidence
+    └→ Recommended Actions
+    ↓
+JSON Response (Pydantic validated)
+```
+
+## 📋 Excel File Format
+
+See [EXCEL_TEMPLATE_SPEC.md](EXCEL_TEMPLATE_SPEC.md) for complete specification.
+
+### Required Columns (23 fields)
+CustomerNo, DocumentName, MainAccount, District, Region, Citizenship, etc.
+
+### Optional Columns (Enhanced Detection)
+- **Email** - For email domain risk analysis
+- **IPAddress**, **IPCountry** - For geolocation checks
+- **IsVPN** (Y/N) - VPN detection flag
+- **DeviceId** - For device reuse tracking
+- **Occupation** - For occupation-based risk
+- **BirthDate** - For enhanced sanctions matching
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```env
+# Azure OpenAI (Required)
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY=your-api-key-here
+AZURE_OPENAI_DEPLOYMENT_RISK=gpt-4o
+
+# Optional
+DATABASE_URL=postgresql://user:pass@localhost:5432/db
+LOG_LEVEL=INFO
+```
+
+See `.env.example` for full configuration options.
+
+## 📖 API Documentation
+
+### Response Structure
+
+```json
+{
+  "report_id": "rpt_2025_12_09_143045_a1b2",
+  "generated_at": "2025-12-09T14:30:45Z",
+  "file": {
+    "filename": "customers.xlsx",
+    "rows_processed": 10,
+    "validation": {"status": "OK"}
+  },
+  "summary": {
+    "total_customers": 10,
+    "risk_distribution": {"LOW": 7, "HIGH": 2, "CRITICAL": 1},
+    "avg_score": 32,
+    "top_risk_drivers": [...]
+  },
+  "customers": [
+    {
+      "customerNo": "CUST-001",
+      "risk": {
+        "score": 85,
+        "riskLevel": "CRITICAL",
+        "confidence": 0.88,
+        "riskDrivers": [...],
+        "breakdown": {...}
+      },
+      "tags": [...],
+      "recommendedActions": [...]
+    }
+  ]
+}
+```
+
+## 🧪 Testing Different Scenarios
+
+### Low Risk Example
+```
+Citizenship: UZB (Uzbekistan)
+MainAccount: retail_banking
+ResidentStatus: RESIDENT
+Expected Result: LOW (score 0-24)
+```
+
+### High Risk Example
+```
+Citizenship: IRN (Iran)
+MainAccount: international_money_service_business
+ResidentStatus: NON_RESIDENT
+IsVPN: Y
+Expected Result: HIGH/CRITICAL (score 75+)
+```
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+ai-service/app/
+├── main.py                      # FastAPI endpoints
+├── bulk_orchestrator.py         # Main orchestration
+├── bulk_risk_engine.py          # Risk scoring (NEW: VPN, device, occupation)
+├── bulk_excel_parser.py         # Excel parsing (NEW: optional columns)
+├── bulk_sanctions_matcher.py    # Sanctions matching (NEW: birthdate logic)
+├── agent_risk_explainer.py      # Azure OpenAI integration (FIXED)
+├── agent_sanctions_decision.py  # Sanctions review
+├── azure_openai_client.py       # OpenAI client
+├── bulk_models.py              # Pydantic models
+└── pure_risk_scorer.py         # Core risk rules
+```
+
+### Running Tests
+
+```bash
+# Run service in dev mode
+docker compose up
+
+# View logs
+docker compose logs -f ai-service
+
+# Restart after code changes
+docker compose restart ai-service
+```
+
+## 🐛 Troubleshooting
+
+### Pydantic Validation Errors (FIXED)
+**Issue**: `Field required [type=missing]` errors  
+**Solution**: Updated `agent_risk_explainer.py` with proper validation and fallback logic
+
+### Azure OpenAI Connection Failed
+**Issue**: Cannot connect to Azure OpenAI  
+**Solution**: 
+1. Verify `.env` file has correct credentials
+2. Check Azure Portal that deployment exists
+3. Ensure API key is valid
+
+### Missing Required Columns
+**Issue**: Excel validation fails  
+**Solution**: See [EXCEL_TEMPLATE_SPEC.md](EXCEL_TEMPLATE_SPEC.md) for required columns
+
+### Device Tracking Not Working
+**Issue**: DEVICE_REUSE not detected  
+**Solution**: Add `DeviceId` column to your Excel file
+
+## 📦 Deployment
+
+### Production Checklist
+
+- [ ] Configure Azure OpenAI with production deployment
+- [ ] Set up proper logging and monitoring
+- [ ] Configure rate limits for Azure OpenAI
+- [ ] Set up database for persistent storage (if needed)
+- [ ] Review and customize risk rules for your region
+- [ ] Update FATF lists with current data
+- [ ] Test with production-like data volumes
+- [ ] Set up backup and disaster recovery
+- [ ] Review data privacy and compliance requirements
+- [ ] Configure SSL/TLS for API endpoint
+
+## 🤝 Contributing
+
+This is a private compliance project. Contact the team for contribution guidelines.
+
+## 📄 License
+
+See LICENSE file for details.
+
+## 🔗 Related Documentation
+
+- [Implementation Guide](IMPLEMENTATION_GUIDE.md) - Full technical documentation
+- [Quick Start](QUICKSTART.md) - 5-minute setup guide  
+- [Excel Template](EXCEL_TEMPLATE_SPEC.md) - Input file specification
+- [Example Response](example-response-body.json) - Sample output
+
+## ⚠️ Important Notes
+
+1. **Azure OpenAI Costs**: Each customer requires ~2 API calls. Monitor usage.
+2. **Rate Limits**: Azure OpenAI has rate limits. Consider batching for large files.
+3. **Data Privacy**: Customer data is sent to Azure OpenAI. Ensure compliance.
+4. **Model Choice**: Use GPT-4 or GPT-4o (NOT GPT-3.5) for best results.
+5. **Device Tracking**: Resets per batch upload (not persistent across sessions).
 - `NationalityDesc`, `CitizenshipDesc` - Descriptive fields
 
 #### Sample Data:
